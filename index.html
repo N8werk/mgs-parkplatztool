@@ -5,43 +5,190 @@
   <title>Parkplatzbelegung Gewog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- OCR ES Module – lädt die lokale Version aus deinem GitHub-Repo -->
+  <!-- Lokales OCR-Modul laden -->
   <script type="module">
     import * as PaddleOCR from "./ocr/index.esm.js";
     window.PaddleOCR = PaddleOCR;
   </script>
 
   <style>
-    body { font-family: sans-serif; margin: 0; padding: 0; background: #f7f7f7; }
-    .container { max-width: 480px; margin: 0 auto; padding: 1em; background: #fff; min-height: 100vh; }
-    label { display: block; margin-top: 1em; }
-    input, select, button { width: 100%; padding: 0.8em; margin-top: 0.4em; }
-    button { background: #1976d2; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
-    button:hover { background: #125ea2; }
-    #ocrStatus { margin-top: 0.5em; font-weight: bold; font-size: 0.9em; color: #1976d2; }
-    video { width: 100%; margin-top: 1em; border-radius: 8px; display: none; }
+    body { font-family: sans-serif; margin: 0; padding: 0; background: #f7f7f7;}
+    .container {
+      max-width: 480px; margin: 0 auto; padding: 1em;
+      background: #fff; min-height: 100vh;
+      box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.05);
+      position: relative;
+    }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em; }
+    .header-left { display: flex; align-items: center; }
+    .header img { height: 50px; margin-right: 12px; }
+    h2 { margin: 0; font-size: 1.4em; }
+    .info-btn { cursor: pointer; font-size: 1.3em; color: #1976d2; background: none; border: none; }
+
+    label { display: block; margin-top: 1.2em; font-size: 1.05em;}
+    input, select, button {
+      width: 100%; padding: 0.7em; margin-top: 0.35em;
+      font-size: 1em; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box;
+    }
+    button {
+      background: #1976d2; color: #fff; border: none;
+      font-weight: bold; margin-top: 1.2em; cursor: pointer; transition: background 0.2s;
+    }
+    button:hover { background: #125ea2;}
+    .eintragen-btn { background: #3BB54A; }
+    .eintragen-btn:hover { background: #329943; }
+
+    .button-row { display: flex; flex-wrap: wrap; gap: 0.6em; margin: 1.2em 0;}
+    .button-row button, .button-row input[type="file"] { flex: 1; margin-top: 0; }
+
+    .search-row { margin: 1em 0 0.5em 0; }
+    .search-row input { width: 100%; }
+
+    .table-responsive { overflow-x: auto; margin-top: 0.5em;}
+    table { border-collapse: collapse; width: 100%; min-width: 600px; background: #fff;}
+    th, td { border: 1px solid #ccc; padding: 0.4em; text-align: left; font-size: 0.95em;}
+    th {
+      background: #f0f0f0;
+      cursor: pointer;
+      user-select: none;
+    }
+    th.sort-asc::after { content: " ▲"; font-size: 0.8em; }
+    th.sort-desc::after { content: " ▼"; font-size: 0.8em; }
+
+    img.thumb { width: 60px; height: auto; border-radius: 6px; display: block; margin: 0 auto;}
+    .delete-btn { background: #e53935; color: #fff; border: none; border-radius: 5px; padding: 0.3em 0.8em; cursor: pointer; }
+
+    #ocrStatus { min-height: 2.2em; margin-top: 0.4em; font-weight: bold; font-size: 0.9em; }
+
+    /* LIVE VIN-KAMERA */
+    #liveOcrSection { margin-top: 0.8em; display: none; }
+    .video-wrapper {
+      position: relative;
+      width: 100%;
+      max-height: 260px;
+      overflow: hidden;
+      border-radius: 8px;
+      background: #000;
+    }
+    #vinVideo {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .vin-frame {
+      position: absolute;
+      border: 2px solid red;
+      box-shadow: 0 0 10px rgba(255,0,0,0.6);
+      top: 30%;
+      left: 10%;
+      width: 80%;
+      height: 35%;
+      pointer-events: none;
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .vin-frame.detected {
+      border-color: #00e676;
+      box-shadow: 0 0 15px rgba(0,230,118,0.9);
+    }
+
+    .platz-conflict td:nth-child(2) {
+      background-color: #ffebee;
+      border-color: #e53935;
+    }
+
+    #vin.vin-valid { border-color: #4caf50; box-shadow: 0 0 4px rgba(76,175,80,0.6); }
+    #vin.vin-invalid { border-color: #f44336; box-shadow: 0 0 4px rgba(244,67,54,0.6); }
+
+    /* MODAL */
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+      width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+    .modal-content {
+      background-color: white; margin: 10% auto; padding: 1.5em 2em;
+      border-radius: 8px; max-width: 400px; position: relative;
+    }
+    .close { position: absolute; top: 8px; right: 12px; font-size: 28px; font-weight: bold; cursor: pointer; }
+
+    @media (max-width: 600px) {
+      .header img { height: 40px; }
+      .container { padding: 0.5em; }
+      h2 { font-size: 1.2em; }
+      input, select, button { font-size: 0.95em; }
+      img.thumb { width: 40px; }
+      table { min-width: 480px; }
+    }
   </style>
+
+  <!-- LIBRARIES -->
+  <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 </head>
+
 
 <body>
 <div class="container">
 
-  <h2>Parkplatzbelegung Gewog</h2>
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <img src="https://www.mgs-autozentrum.de/website/themes/mgs-autozentrum.de/img/template_logo.png" alt="MGS Logo">
+      <h2>Parkplatzbelegung Gewog</h2>
+    </div>
+    <button class="info-btn" id="infoBtn">ℹ️</button>
+  </div>
 
-  <form id="fahrzeugForm">
+  <!-- INFO-MODAL -->
+  <div id="infoModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="infoCloseBtn">&times;</span>
+      <h3>Informationen</h3>
+      <ul>
+        <li>VIN kann manuell eingegeben oder per Foto / Livekamera erkannt werden.</li>
+        <li>Stellplätze sind von 001 bis 250 auswählbar.</li>
+        <li>Ein Stellplatz kann nicht doppelt belegt werden.</li>
+        <li>Daten werden lokal im Browser (IndexedDB) gespeichert.</li>
+      </ul>
+      <p>Kontakt: Michael.Hofmann@motor-gruppe-sticht.de</p>
+    </div>
+  </div>
 
+  <!-- FORMULAR -->
+  <form id="fahrzeugForm" autocomplete="off">
+
+    <!-- STELLPLATZ -->
+    <label>Stellplatz:
+      <select id="stellplatz">
+        <option value="">-- Bitte Stellplatz wählen --</option>
+      </select>
+    </label>
+
+    <!-- VIN -->
     <label>Fahrgestellnummer (VIN):
-      <input type="text" id="vin" placeholder="VIN manuell eingeben oder automatisch scannen" />
-      <input type="file" id="vinFoto" accept="image/*" capture="environment">
+      <input type="text" id="vin" placeholder="VIN manuell eingeben oder automatisch erkennen lassen" />
+    </label>
+
+    <!-- FOTO-OCR -->
+    <label>VIN-Foto (Scheibe / Etikett):
+      <input type="file" id="vinFoto" accept="image/*" capture="environment" />
       <button type="button" id="vinOcrBtn">VIN aus Foto erkennen</button>
-      <button type="button" id="liveOcrBtn">Live VIN-Kamera starten</button>
+      <button type="button" id="liveOcrToggleBtn">Live VIN-Kamera starten</button>
       <div id="ocrStatus"></div>
     </label>
 
-    <label>Stellplatz:
-      <select id="stellplatz"></select>
+    <!-- LIVE-KAMERA -->
+    <div id="liveOcrSection">
+      <p style="margin-bottom:0.4em;">Richten Sie die VIN im roten Rahmen aus.</p>
+      <div class="video-wrapper">
+        <video id="vinVideo" autoplay playsinline></video>
+        <div class="vin-frame" id="vinFrame"></div>
+      </div>
+    </div>
+
+    <!-- FAHRZEUGFOTO -->
+    <label>Fahrzeugfoto Front:
+      <input type="file" id="foto" accept="image/*" capture="environment" />
     </label>
 
+    <!-- STATUS -->
     <label>Status:
       <select id="status">
         <option>Werkstatt</option>
@@ -55,23 +202,177 @@
       </select>
     </label>
 
-    <label>Fahrzeug Foto:
-      <input type="file" id="foto" accept="image/*" capture="environment">
-    </label>
-
-    <button type="submit" id="eintragenBtn" style="background:#3BB54A;">Eintragen</button>
-
+    <button type="submit" class="eintragen-btn">Eintragen</button>
   </form>
 
-  <video id="liveVideo" autoplay></video>
+  <!-- BUTTON-ZEILE -->
+  <div class="button-row">
+    <button onclick="exportHTML()">Export HTML</button>
+    <button onclick="exportExcelWithImages()">Export XLSX</button>
+    <button onclick="exportDBasJSON()">Export JSON</button>
+    <button onclick="document.getElementById('jsonImport').click()">Import JSON</button>
+    <input type="file" id="jsonImport" accept=".json" style="display:none">
+    <button onclick="document.getElementById('xlsxImport').click()">Import XLSX</button>
+    <input type="file" id="xlsxImport" accept=".xlsx" style="display:none">
+    <button onclick="toggleOCR()" id="ocrToggleBtn" style="background:#ff9800;">OCR deaktivieren</button>
+    <button onclick="clearAllEntries()" style="background:#e53935;">Alle löschen</button>
+  </div>
+
+  <!-- SUCHE -->
+  <div class="search-row">
+    <input type="text" id="searchInput" placeholder="Suche in VIN, Stellplatz oder Status..." />
+  </div>
+
+  <!-- TABELLE -->
+  <div class="table-responsive">
+    <table id="datentabelle">
+      <thead>
+        <tr>
+          <th>VIN</th>
+          <th>Stellplatz</th>
+          <th>Status</th>
+          <th>Bild</th>
+          <th>Aktion</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 
 </div>
 
 <script>
+  let db;
+  let ocrReady = false;
+  let ocrInitializing = false;
+  let ocrEnabled = true;
+  let liveOcrActive = false;
+  let liveStream = null;
+  let liveOcrInterval = null;
 
-  /* ──────────────────────────────────────────
-   * 1) STELLPLÄTZE LADEN (001–250)
-   * ────────────────────────────────────────── */
+  /* ========= Hilfsmittel ========= */
+
+  function setOcrStatus(text, color = "#1976d2") {
+    const el = document.getElementById("ocrStatus");
+    el.style.color = color;
+    el.textContent = text;
+  }
+
+  function resizeImageToBase64(file, maxDim = 400, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+
+      reader.onload = e => {
+        img.onload = () => {
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h *= maxDim / w; w = maxDim; }
+            else { w *= maxDim / h; h = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ========= IndexedDB ========= */
+
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open("ParkplatzDB", 1);
+      request.onupgradeneeded = e => {
+        db = e.target.result;
+        if (!db.objectStoreNames.contains("fahrzeuge")) {
+          db.createObjectStore("fahrzeuge", { keyPath: "id", autoIncrement: true });
+        }
+      };
+      request.onsuccess = e => { db = e.target.result; resolve(); };
+      request.onerror = e => reject(e.target.error);
+    });
+  }
+
+  function addFahrzeug(data) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("fahrzeuge", "readwrite");
+      tx.objectStore("fahrzeuge").add(data);
+      tx.oncomplete = resolve;
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  function getAllFahrzeuge() {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("fahrzeuge", "readonly");
+      const req = tx.objectStore("fahrzeuge").getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = e => reject(e.target.error);
+    });
+  }
+
+  function deleteFahrzeug(id) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("fahrzeuge", "readwrite");
+      tx.objectStore("fahrzeuge").delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  function clearFahrzeuge() {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("fahrzeuge", "readwrite");
+      tx.objectStore("fahrzeuge").clear();
+      tx.oncomplete = resolve;
+      tx.onerror = e => reject(e.target.error);
+    });
+  }
+
+  /* ========= Tabelle ========= */
+
+  function addRowToTable({ id, vin, platz, status, bild }) {
+    const tbody = document.querySelector("#datentabelle tbody");
+    const tr = document.createElement("tr");
+    tr.dataset.id = id;
+    tr.innerHTML = `
+      <td>${vin || ""}</td>
+      <td>${platz}</td>
+      <td>${status}</td>
+      <td>${bild ? `<img class="thumb" src="${bild}">` : ""}</td>
+      <td><button class="delete-btn" onclick="deleteSingleEntry(${id})">Löschen</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  function clearTable() {
+    document.querySelector("#datentabelle tbody").innerHTML = "";
+  }
+
+  async function ladeDaten() {
+    clearTable();
+    const daten = await getAllFahrzeuge();
+    daten.forEach(addRowToTable);
+    filterTable();
+  }
+
+  async function deleteSingleEntry(id) {
+    if (confirm("Diesen Eintrag wirklich löschen?")) {
+      await deleteFahrzeug(id);
+      await ladeDaten();
+    }
+  }
+  window.deleteSingleEntry = deleteSingleEntry;
+
+  /* ========= Stellplätze ========= */
+
   function fillStellplatzDropdown() {
     const s = document.getElementById("stellplatz");
     s.innerHTML = '<option value="">-- Bitte Stellplatz wählen --</option>';
@@ -84,162 +385,458 @@
     }
   }
 
-  /* ──────────────────────────────────────────
-   * 2) OCR STATUS HELFER
-   * ────────────────────────────────────────── */
-  function setOcrStatus(msg, color="#1976d2") {
-    const el = document.getElementById("ocrStatus");
-    el.style.color = color;
-    el.textContent = msg;
+  /* ========= VIN Validierung ========= */
+
+  function transliterateVinChar(c) {
+    const map = {
+      A:1,B:2,C:3,D:4,E:5,F:6,G:7,H:8,
+      J:1,K:2,L:3,M:4,N:5,P:7,R:9,
+      S:2,T:3,U:4,V:5,W:6,X:7,Y:8,Z:9,
+      '0':0,'1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9
+    };
+    return map[c] ?? 0;
   }
 
-  /* ──────────────────────────────────────────
-   * 3) OCR INITIALISIEREN
-   * ────────────────────────────────────────── */
-  let ocrReady = false;
-  let ocrInitializing = false;
-  let ocrEnabled = true;
+  function validateVin(vinRaw) {
+    const vin = vinRaw.toUpperCase();
+    const patternOk = /^[A-HJ-NPR-Z0-9]{17}$/.test(vin);
+    if (!patternOk) return { isValid: false, reason: "Format/Länge passt nicht (17 Zeichen, keine I/O/Q)." };
+
+    const weights = [8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2];
+    let sum = 0;
+    for (let i=0; i<17; i++) {
+      sum += transliterateVinChar(vin[i]) * weights[i];
+    }
+    const remainder = sum % 11;
+    const checkChar = remainder === 10 ? 'X' : String(remainder);
+    const checksumOk = vin[8] === checkChar;
+
+    if (!checksumOk) {
+      return { isValid: false, reason: "Checksummenprüfung fehlgeschlagen." };
+    }
+    return { isValid: true, reason: "VIN gültig." };
+  }
+
+  function updateVinFieldValidation() {
+    const vinInput = document.getElementById("vin");
+    const val = vinInput.value.trim();
+    vinInput.classList.remove("vin-valid", "vin-invalid");
+    if (!val) {
+      setOcrStatus("");
+      return;
+    }
+    const v = validateVin(val);
+    if (v.isValid) {
+      vinInput.classList.add("vin-valid");
+      setOcrStatus("VIN gültig.", "green");
+      if (liveOcrActive) stopLiveOcr();
+    } else {
+      vinInput.classList.add("vin-invalid");
+      setOcrStatus("Hinweis: " + v.reason, "orange");
+    }
+  }
+  document.getElementById("vin").addEventListener("input", updateVinFieldValidation);
+
+  /* ========= OCR ========= */
 
   async function initOCR() {
     if (ocrReady || ocrInitializing) return;
-
     ocrInitializing = true;
     setOcrStatus("OCR wird initialisiert, bitte kurz warten...");
-
     try {
-      await window.PaddleOCR.init();     // wichtig!
+      await window.PaddleOCR.init();
       ocrReady = true;
       setOcrStatus("OCR bereit.");
     } catch (err) {
       console.error(err);
-      setOcrStatus("Fehler beim Laden des OCR Modells: " + err.message, "red");
+      setOcrStatus("Fehler beim Laden des OCR-Modells: " + err.message, "red");
     } finally {
       ocrInitializing = false;
     }
   }
 
-  /* ──────────────────────────────────────────
-   * 4) VIN-KANDIDATEN aus TEXT extrahieren
-   *     Gültige VIN = 17 Zeichen, I/O/Q nicht erlaubt
-   * ────────────────────────────────────────── */
   function extractVinCandidates(text) {
-    const vinRegex = /\b([A-HJ-NPR-Z0-9]{17})\b/g;
-    const found = [];
-    let m;
-    while ((m = vinRegex.exec(text)) !== null) {
-      found.push(m[1]);
-    }
-    return found;
+    const norm = (text || "").replace(/\s+/g, "").toUpperCase();
+    const re = /[A-HJ-NPR-Z0-9]{17}/g;
+    const m = norm.match(re) || [];
+    return [...new Set(m)];
   }
 
   function handleVinCandidates(candidates) {
+    const frame = document.getElementById("vinFrame");
     if (!candidates.length) {
-      setOcrStatus("Keine VIN gefunden.");
+      setOcrStatus("Keine VIN gefunden.", "red");
+      frame.classList.remove("detected");
       return;
     }
-    document.getElementById("vin").value = candidates[0];
-    setOcrStatus("VIN erkannt: " + candidates[0]);
+    const vinInput = document.getElementById("vin");
+    const vin = candidates[0];
+    vinInput.value = vin;
+    updateVinFieldValidation();
+    const check = validateVin(vin);
+    if (check.isValid) {
+      setOcrStatus("Erkannte VIN: " + vin + " (gültig)", "green");
+    } else {
+      setOcrStatus("Erkannte VIN: " + vin + " – " + check.reason, "orange");
+    }
+    frame.classList.add("detected");
+    setTimeout(() => frame.classList.remove("detected"), 1500);
   }
 
-  /* ──────────────────────────────────────────
-   * 5) FOTO-OCR
-   * ────────────────────────────────────────── */
-  document.getElementById("vinOcrBtn").addEventListener("click", async () => {
+  async function recognizeVinFromImage(imageBitmapOrCanvas) {
+    if (!ocrEnabled) {
+      alert("OCR ist deaktiviert.");
+      return;
+    }
     await initOCR();
+    if (!ocrReady) return;
+
+    setOcrStatus("OCR läuft...");
+    const res = await window.PaddleOCR.recognize(imageBitmapOrCanvas);
+
+    let raw = "";
+    if (Array.isArray(res.text)) raw = res.text.join(" ");
+    else if (typeof res.text === "string") raw = res.text;
+    const candidates = extractVinCandidates(raw || "");
+    handleVinCandidates(candidates);
+  }
+
+  // Foto-OCR per Button
+  async function doPhotoOcr() {
     const input = document.getElementById("vinFoto");
     if (!input.files.length) {
-      alert("Bitte ein VIN-Foto auswählen.");
+      alert("Bitte zuerst ein VIN-Foto auswählen.");
       return;
     }
     const img = await createImageBitmap(input.files[0]);
-    const res = await window.PaddleOCR.recognize(img);
+    await recognizeVinFromImage(img);
+  }
+  document.getElementById("vinOcrBtn").addEventListener("click", doPhotoOcr);
 
-    const raw = Array.isArray(res.text) ? res.text.join(" ") : res.text;
-    const candidates = extractVinCandidates(raw);
-    handleVinCandidates(candidates);
+  // Auto-OCR direkt beim Auswählen (optional)
+  document.getElementById("vinFoto").addEventListener("change", async function() {
+    if (!this.files.length) return;
+    const img = await createImageBitmap(this.files[0]);
+    await recognizeVinFromImage(img);
   });
 
-  /* ──────────────────────────────────────────
-   * 6) LIVE-KAMERA OCR
-   * ────────────────────────────────────────── */
-  let streamActive = false;
-  const video = document.getElementById("liveVideo");
+  /* ========= Live-OCR ========= */
 
-  document.getElementById("liveOcrBtn").addEventListener("click", async () => {
+  async function startLiveOcr() {
+    if (!ocrEnabled) { alert("OCR ist deaktiviert."); return; }
     await initOCR();
+    if (!ocrReady) return;
+    if (liveOcrActive) return;
 
-    if (streamActive) {
-      video.style.display = "none";
-      video.srcObject.getTracks().forEach(t => t.stop());
-      streamActive = false;
-      setOcrStatus("Livekamera beendet.");
+    const video = document.getElementById("vinVideo");
+    try {
+      liveStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false
+      });
+      video.srcObject = liveStream;
+      document.getElementById("liveOcrSection").style.display = "block";
+      liveOcrActive = true;
+      document.getElementById("liveOcrToggleBtn").textContent = "Live VIN-Kamera stoppen";
+      setOcrStatus("Live-OCR aktiv. Bitte VIN im roten Rahmen ausrichten.");
+      liveOcrInterval = setInterval(async () => {
+        if (!ocrEnabled || !ocrReady || !liveOcrActive) return;
+        if (video.readyState < 2) return;
+
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (!vw || !vh) return;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = vw;
+        canvas.height = vh;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, vw, vh);
+
+        // Bereich entsprechend roter Box (mittig)
+        const cropX = vw * 0.1;
+        const cropY = vh * 0.3;
+        const cropW = vw * 0.8;
+        const cropH = vh * 0.35;
+
+        const cropCanvas = document.createElement("canvas");
+        cropCanvas.width = cropW;
+        cropCanvas.height = cropH;
+        const cctx = cropCanvas.getContext("2d");
+        cctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+        await recognizeVinFromImage(cropCanvas);
+      }, 1500);
+    } catch (err) {
+      alert("Kamera konnte nicht gestartet werden: " + err.message);
+    }
+  }
+
+  function stopLiveOcr() {
+    if (!liveOcrActive) return;
+    if (liveOcrInterval) {
+      clearInterval(liveOcrInterval);
+      liveOcrInterval = null;
+    }
+    if (liveStream) {
+      liveStream.getTracks().forEach(t => t.stop());
+      liveStream = null;
+    }
+    liveOcrActive = false;
+    document.getElementById("liveOcrSection").style.display = "none";
+    document.getElementById("liveOcrToggleBtn").textContent = "Live VIN-Kamera starten";
+    setOcrStatus("Live-OCR beendet.");
+  }
+
+  document.getElementById("liveOcrToggleBtn").addEventListener("click", () => {
+    if (liveOcrActive) stopLiveOcr();
+    else startLiveOcr();
+  });
+
+  function toggleOCR() {
+    ocrEnabled = !ocrEnabled;
+    const btn = document.getElementById("ocrToggleBtn");
+    btn.textContent = ocrEnabled ? "OCR deaktivieren" : "OCR aktivieren";
+    btn.style.background = ocrEnabled ? "#ff9800" : "#4caf50";
+    setOcrStatus(ocrEnabled ? "OCR ist aktiviert." : "OCR ist deaktiviert.", ocrEnabled ? "#1976d2" : "#4caf50");
+    if (!ocrEnabled) stopLiveOcr();
+  }
+  window.toggleOCR = toggleOCR;
+
+  /* ========= Formular / Eintragen ========= */
+
+  document.getElementById("fahrzeugForm").onsubmit = async function(e) {
+    e.preventDefault();
+
+    const platz = document.getElementById("stellplatz").value;
+    const vinInput = document.getElementById("vin").value.trim();
+    const status = document.getElementById("status").value;
+    const vinFotoInput = document.getElementById("vinFoto");
+    const fotoInput = document.getElementById("foto");
+
+    if (!platz) {
+      alert("Bitte einen Stellplatz auswählen.");
       return;
     }
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
+    const vinFotoVorhanden = vinFotoInput.files.length > 0;
+    const fotoVorhanden = fotoInput.files.length > 0;
+
+    // VIN nur Pflicht, wenn kein VIN-Foto und kein Fahrzeugfoto
+    if (!vinInput && !vinFotoVorhanden && !fotoVorhanden) {
+      alert("Bitte VIN eingeben oder ein VIN-/Fahrzeugfoto aufnehmen.");
+      return;
+    }
+
+    // Stellplatz-Dubletten
+    const alle = await getAllFahrzeuge();
+    const konflikt = alle.filter(d => d.platz === platz);
+    if (konflikt.length > 0) {
+      alert("Stellplatz " + platz + " ist bereits belegt.");
+      const rows = document.querySelectorAll("#datentabelle tbody tr");
+      rows.forEach(r => {
+        r.classList.remove("platz-conflict");
+        const tdPlatz = r.children[1]?.textContent || "";
+        if (tdPlatz === platz) {
+          r.classList.add("platz-conflict");
+        }
       });
-      video.srcObject = stream;
-      video.style.display = "block";
-      streamActive = true;
-      setOcrStatus("Livekamera aktiv. Scanne VIN...");
-
-      startLiveOcrLoop();
-    } catch (err) {
-      console.error(err);
-      alert("Kamera konnte nicht gestartet werden: " + err.message);
-    }
-  });
-
-  async function startLiveOcrLoop() {
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-
-    async function loop() {
-      if (!streamActive) return;
-
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
-
-      const bitmap = await createImageBitmap(canvas);
-      const res = await window.PaddleOCR.recognize(bitmap);
-
-      const raw = Array.isArray(res.text) ? res.text.join(" ") : res.text;
-      const candidates = extractVinCandidates(raw);
-
-      if (candidates.length) {
-        handleVinCandidates(candidates);
-      }
-
-      requestAnimationFrame(loop);
+      return;
     }
 
-    loop();
-  }
+    let bild = "";
+    if (fotoVorhanden) {
+      bild = await resizeImageToBase64(fotoInput.files[0]);
+    }
 
-  /* ──────────────────────────────────────────
-   * 7) FORMULAR SUBMIT
-   * ────────────────────────────────────────── */
-  document.getElementById("fahrzeugForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-
-    const vin = document.getElementById("vin").value.trim();
-    if (!vin) { alert("Bitte VIN eingeben oder scannen."); return; }
-
-    alert("Fahrzeug erfolgreich eingetragen:\nVIN: " + vin);
-  });
-
-  /* ──────────────────────────────────────────
-   * INIT
-   * ────────────────────────────────────────── */
-  window.onload = async () => {
-    fillStellplatzDropdown();
-    setOcrStatus("OCR wird initialisiert...");
-    await initOCR();
+    const finalVin = vinInput; // VIN-Foto wird nicht gespeichert, nur Text
+    await addFahrzeug({ vin: finalVin, platz, status, bild });
+    await ladeDaten();
+    this.reset();
+    stopLiveOcr();
+    document.getElementById("vin").classList.remove("vin-valid", "vin-invalid");
+    setOcrStatus("");
   };
 
+  /* ========= Export / Import ========= */
+
+  async function exportHTML() {
+    const daten = await getAllFahrzeuge();
+    let html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Fahrzeugdaten</title>";
+    html += "<style>table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:4px;}</style>";
+    html += "</head><body><h2>Fahrzeugdaten</h2><table><tr><th>VIN</th><th>Stellplatz</th><th>Status</th></tr>";
+    daten.forEach(d => {
+      html += `<tr><td>${d.vin || ""}</td><td>${d.platz}</td><td>${d.status}</td></tr>`;
+    });
+    html += "</table></body></html>";
+    saveAs(new Blob([html], {type:'text/html'}), "Fahrzeugdaten.html");
+  }
+  window.exportHTML = exportHTML;
+
+  async function exportDBasJSON() {
+    const daten = await getAllFahrzeuge();
+    saveAs(new Blob([JSON.stringify(daten, null, 2)], {type:"application/json"}), "Fahrzeugdaten.json");
+  }
+  window.exportDBasJSON = exportDBasJSON;
+
+  document.getElementById("jsonImport").addEventListener("change", async function() {
+    const file = this.files[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+      const arr = JSON.parse(text);
+      if (!Array.isArray(arr)) throw new Error("Keine gültige JSON-Liste");
+      await clearFahrzeuge();
+      for (const item of arr) {
+        await addFahrzeug({
+          vin: item.vin || "",
+          platz: item.platz,
+          status: item.status,
+          bild: item.bild || ""
+        });
+      }
+      await ladeDaten();
+      alert("Import erfolgreich.");
+    } catch(e) {
+      alert("Fehler beim Import: " + e.message);
+    }
+    this.value = "";
+  });
+
+  async function exportExcelWithImages() {
+    const daten = await getAllFahrzeuge();
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Fahrzeuge');
+    sheet.columns = [
+      { header: 'VIN', key: 'vin', width: 20 },
+      { header: 'Stellplatz', key: 'platz', width: 12 },
+      { header: 'Status', key: 'status', width: 25 },
+      { header: 'Bild (Base64)', key: 'bild', width: 50 }
+    ];
+    daten.forEach(d => {
+      sheet.addRow({
+        vin: d.vin || "",
+        platz: d.platz,
+        status: d.status,
+        bild: d.bild || ""
+      });
+    });
+    const buf = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buf]), "Fahrzeugdaten.xlsx");
+  }
+  window.exportExcelWithImages = exportExcelWithImages;
+
+  document.getElementById("xlsxImport").addEventListener("change", async function() {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async e => {
+      try {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(e.target.result);
+        const sheet = workbook.getWorksheet('Fahrzeuge') || workbook.worksheets[0];
+        if (!sheet) {
+          alert("Kein Arbeitsblatt mit Daten gefunden");
+          return;
+        }
+        const data = [];
+        sheet.eachRow((row, rowNumber) => {
+          if (rowNumber === 1) return;
+          const vin = row.getCell(1).text.trim();
+          const platz = row.getCell(2).text.trim();
+          if (!platz) return;
+          const status = row.getCell(3).text.trim();
+          const bild = row.getCell(4).text.trim() || "";
+          data.push({ vin, platz, status, bild });
+        });
+        await clearFahrzeuge();
+        for (const item of data) {
+          await addFahrzeug(item);
+        }
+        await ladeDaten();
+        alert("XLSX-Import erfolgreich");
+      } catch(err) {
+        alert("Fehler beim XLSX-Import: " + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    this.value = "";
+  });
+
+  async function clearAllEntries() {
+    if (confirm("Möchten Sie wirklich alle Einträge löschen?")) {
+      await clearFahrzeuge();
+      await ladeDaten();
+    }
+  }
+  window.clearAllEntries = clearAllEntries;
+
+  /* ========= Suche & Sortierung ========= */
+
+  function filterTable() {
+    const q = document.getElementById("searchInput").value.trim().toLowerCase();
+    const rows = document.querySelectorAll("#datentabelle tbody tr");
+    rows.forEach(r => {
+      const txt = r.innerText.toLowerCase();
+      r.style.display = txt.includes(q) ? "" : "none";
+    });
+  }
+  document.getElementById("searchInput").addEventListener("input", filterTable);
+
+  function setupSortHandlers() {
+    const headers = document.querySelectorAll("#datentabelle thead th");
+    headers.forEach((th, index) => {
+      th.addEventListener("click", () => sortTableByColumn(index, th));
+    });
+  }
+
+  function sortTableByColumn(colIndex, th) {
+    const tbody = document.querySelector("#datentabelle tbody");
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const currentDir = th.classList.contains("sort-asc") ? "asc" :
+                       th.classList.contains("sort-desc") ? "desc" : null;
+    const newDir = currentDir === "asc" ? "desc" : "asc";
+
+    document.querySelectorAll("#datentabelle thead th").forEach(h => h.classList.remove("sort-asc", "sort-desc"));
+    th.classList.add(newDir === "asc" ? "sort-asc" : "sort-desc");
+
+    rows.sort((a, b) => {
+      const aText = (a.children[colIndex]?.textContent || "").trim().toLowerCase();
+      const bText = (b.children[colIndex]?.textContent || "").trim().toLowerCase();
+      if (aText < bText) return newDir === "asc" ? -1 : 1;
+      if (aText > bText) return newDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    rows.forEach(r => tbody.appendChild(r));
+  }
+
+  /* ========= Modal ========= */
+
+  const infoBtn = document.getElementById('infoBtn');
+  const infoModal = document.getElementById('infoModal');
+  const infoCloseBtn = document.getElementById('infoCloseBtn');
+
+  infoBtn.addEventListener('click', () => {
+    infoModal.style.display = 'block';
+  });
+  infoCloseBtn.addEventListener('click', () => {
+    infoModal.style.display = 'none';
+  });
+  window.addEventListener('click', (event) => {
+    if (event.target === infoModal) {
+      infoModal.style.display = 'none';
+    }
+  });
+
+  /* ========= Onload ========= */
+
+  window.onload = async () => {
+    await openDB();
+    fillStellplatzDropdown();
+    await ladeDaten();
+    setupSortHandlers();
+    await initOCR();
+  };
 </script>
 
 </body>
