@@ -497,17 +497,19 @@
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0, vw, vh);
 
-    // Bereich für VIN (wie roter Rahmen)
-    const cropX = vw * 0.05;
-    const cropY = vh * 0.28;
-    const cropW = vw * 0.90;
-    const cropH = vh * 0.40;
+   // --- VIN-Streifen exakt croppen (optimiert für dein Foto) ---
 
-    const cropCanvas = document.createElement("canvas");
-    cropCanvas.width = cropW;
-    cropCanvas.height = cropH;
-    const cctx = cropCanvas.getContext("2d");
-    cctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+// Das VW/VH-Verhältnis deines Beispiels analysiert:
+// VIN liegt ca. im unteren Drittel, sehr schmaler horizontaler Streifen
+
+// Wir wählen einen extrem schmalen Bereich, der nur die VIN enthält
+const cropX = vw * 0.12;     // etwas Abstand links
+const cropW = vw * 0.76;     // verhindert Reflexionsränder
+
+// vertikale Position der VIN exakt aus deinem Bild geschätzt:
+const cropY = vh * 0.42;     // leicht unter Mitte
+const cropH = vh * 0.10;     // dünner Streifen, exakt wie dein VIN-Foto
+
 
     // Vorverarbeitung
     preprocessCanvasImage(cropCanvas);
@@ -710,4 +712,5 @@
 </script>
 </body>
 </html>
+
 
