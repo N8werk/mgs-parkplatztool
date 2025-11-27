@@ -523,6 +523,79 @@ document.getElementById("lensScanBtn").addEventListener("click", () => {
   document.getElementById("ocrStatus").textContent = "";
   launchGoogleLens();
 });
+/* ==========================================================
+   STELLPLATZ – AUTO-VORSCHLAG BEI ERFOLGREICHEM VIN-SCAN
+   ========================================================== */
+
+/* Speichert und lädt den zuletzt genutzten Stellplatz */
+function getLastStellplatz() {
+  return localStorage.getItem("lastStellplatz");
+}
+
+function setLastStellplatz(value) {
+  localStorage.setItem("lastStellplatz", value);
+}
+
+/* Gibt den nächsten Stellplatz zurück */
+function getNextStellplatz() {
+  const last = getLastStellplatz();
+
+  if (!last) return ""; // noch nie benutzt
+
+  let n = parseInt(last, 10);
+  if (isNaN(n)) return "";
+
+  n = n + 1;
+  if (n > 250) n = 1;
+
+  return n.toString().padStart(3, "0");
+}
+
+/* Öffnet das Stellplatz-Dropdown automatisch */
+function openStellplatzDropdown() {
+  const sp = document.getElementById("stellplatz");
+
+  // Als Touch-Event triggerbar
+  const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+  sp.dispatchEvent(event);
+
+  // für Samsung/Chrome fallback
+  sp.focus();
+}
+
+/* Erweiterung des VIN-Autoübernahme-Prozesses */
+async function handleVinAutoFillSuccess() {
+  // 🔹 Auto-Stellplatz setzen
+  const next = getNextStellplatz();
+  const sp = document.getElementById("stellplatz");
+
+  if (next) {
+    sp.value = next;
+  }
+
+  // 🔹 Dropdown automatisch öffnen
+  openStellplatzDropdown();
+}
+
+/* Erweitere tryClipboardVinUpdate() um Stellplatz-Aktion */
+const originalTryClipboard = tryClipboardVinUpdate;
+
+tryClipboardVinUpdate = async function (auto = false) {
+  const result = await originalTryClipboard(auto);
+
+  if (result) {
+    // VIN erfolgreich -> nächster Stellplatz & Dropdown öffnen
+    handleVinAutoFillSuccess();
+  }
+
+  return result;
+};
+
+/* Speichere den Stellplatz nach erfolgreichem Eintragen */
+document.getElementById("fahrzeugForm").addEventListener("submit", () => {
+  const sp = document.getElementById("stellplatz").value;
+  if (sp) setLastStellplatz(sp);
+});
 
 
 /* ==========================================================
@@ -539,3 +612,4 @@ window.onload = async () => {
 
 </body>
 </html>
+
