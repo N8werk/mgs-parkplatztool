@@ -5,11 +5,8 @@
   <title>Parkplatzbelegung Gewog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Lokales OCR-Modul laden -->
-  <script type="module">
-    import * as PaddleOCR from "./ocr/index.esm.js";
-    window.PaddleOCR = PaddleOCR;
-  </script>
+  <!-- Tesseract.js für OCR (statt PaddleOCR) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/tesseract.min.js"></script>
 
   <style>
     body { font-family: sans-serif; margin: 0; padding: 0; background: #f7f7f7;}
@@ -118,7 +115,7 @@
     }
   </style>
 
-  <!-- LIBRARIES -->
+  <!-- Libraries für Export -->
   <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 </head>
@@ -243,14 +240,11 @@
 
 <script>
   let db;
-  let ocrReady = false;
-  let ocrInitializing = false;
   let ocrEnabled = true;
   let liveOcrActive = false;
   let liveStream = null;
   let liveOcrInterval = null;
-
-  /* ========= Hilfsmittel ========= */
+  let tesseractBusy = false;
 
   function setOcrStatus(text, color = "#1976d2") {
     const el = document.getElementById("ocrStatus");
@@ -385,7 +379,7 @@
     }
   }
 
-  /* ========= VIN Validierung ========= */
+  /* ========= VIN-Validierung ========= */
 
   function transliterateVinChar(c) {
     const map = {
@@ -437,23 +431,7 @@
   }
   document.getElementById("vin").addEventListener("input", updateVinFieldValidation);
 
-  /* ========= OCR ========= */
-
-  async function initOCR() {
-    if (ocrReady || ocrInitializing) return;
-    ocrInitializing = true;
-    setOcrStatus("OCR wird initialisiert, bitte kurz warten...");
-    try {
-      await window.PaddleOCR.init();
-      ocrReady = true;
-      setOcrStatus("OCR bereit.");
-    } catch (err) {
-      console.error(err);
-      setOcrStatus("Fehler beim Laden des OCR-Modells: " + err.message, "red");
-    } finally {
-      ocrInitializing = false;
-    }
-  }
+  /* ========= OCR mit Tesseract ========= */
 
   function extractVinCandidates(text) {
     const norm = (text || "").replace(/\s+/g, "").toUpperCase();
@@ -483,49 +461,55 @@
     setTimeout(() => frame.classList.remove("detected"), 1500);
   }
 
-  async function recognizeVinFromImage(imageBitmapOrCanvas) {
+  async function recognizeVinFromImage(imageSource) {
     if (!ocrEnabled) {
       alert("OCR ist deaktiviert.");
       return;
     }
-    await initOCR();
-    if (!ocrReady) return;
-
+    if (tesseractBusy) {
+      setOcrStatus("OCR ist noch beschäftigt...", "orange");
+      return;
+    }
+    tesseractBusy = true;
     setOcrStatus("OCR läuft...");
-    const res = await window.PaddleOCR.recognize(imageBitmapOrCanvas);
 
-    let raw = "";
-    if (Array.isArray(res.text)) raw = res.text.join(" ");
-    else if (typeof res.text === "string") raw = res.text;
-    const candidates = extractVinCandidates(raw || "");
-    handleVinCandidates(candidates);
+    try {
+      const { data: { text } } = await Tesseract.recognize(
+        imageSource,
+        "eng",
+        {
+          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        }
+      );
+      const candidates = extractVinCandidates(text || "");
+      handleVinCandidates(candidates);
+    } catch (err) {
+      console.error(err);
+      setOcrStatus("Fehler beim OCR: " + err.message, "red");
+    } finally {
+      tesseractBusy = false;
+    }
   }
 
-  // Foto-OCR per Button
   async function doPhotoOcr() {
     const input = document.getElementById("vinFoto");
     if (!input.files.length) {
       alert("Bitte zuerst ein VIN-Foto auswählen.");
       return;
     }
-    const img = await createImageBitmap(input.files[0]);
-    await recognizeVinFromImage(img);
+    const file = input.files[0];
+    await recognizeVinFromImage(file);
   }
   document.getElementById("vinOcrBtn").addEventListener("click", doPhotoOcr);
 
-  // Auto-OCR direkt beim Auswählen (optional)
   document.getElementById("vinFoto").addEventListener("change", async function() {
     if (!this.files.length) return;
-    const img = await createImageBitmap(this.files[0]);
-    await recognizeVinFromImage(img);
+    const file = this.files[0];
+    await recognizeVinFromImage(file);
   });
-
-  /* ========= Live-OCR ========= */
 
   async function startLiveOcr() {
     if (!ocrEnabled) { alert("OCR ist deaktiviert."); return; }
-    await initOCR();
-    if (!ocrReady) return;
     if (liveOcrActive) return;
 
     const video = document.getElementById("vinVideo");
@@ -539,8 +523,9 @@
       liveOcrActive = true;
       document.getElementById("liveOcrToggleBtn").textContent = "Live VIN-Kamera stoppen";
       setOcrStatus("Live-OCR aktiv. Bitte VIN im roten Rahmen ausrichten.");
+
       liveOcrInterval = setInterval(async () => {
-        if (!ocrEnabled || !ocrReady || !liveOcrActive) return;
+        if (!ocrEnabled || !liveOcrActive || tesseractBusy) return;
         if (video.readyState < 2) return;
 
         const vw = video.videoWidth;
@@ -553,7 +538,6 @@
         const ctx = canvas.getContext("2d");
         ctx.drawImage(video, 0, 0, vw, vh);
 
-        // Bereich entsprechend roter Box (mittig)
         const cropX = vw * 0.1;
         const cropY = vh * 0.3;
         const cropW = vw * 0.8;
@@ -566,7 +550,7 @@
         cctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
         await recognizeVinFromImage(cropCanvas);
-      }, 1500);
+      }, 3000);
     } catch (err) {
       alert("Kamera konnte nicht gestartet werden: " + err.message);
     }
@@ -628,7 +612,6 @@
       return;
     }
 
-    // Stellplatz-Dubletten
     const alle = await getAllFahrzeuge();
     const konflikt = alle.filter(d => d.platz === platz);
     if (konflikt.length > 0) {
@@ -649,7 +632,7 @@
       bild = await resizeImageToBase64(fotoInput.files[0]);
     }
 
-    const finalVin = vinInput; // VIN-Foto wird nicht gespeichert, nur Text
+    const finalVin = vinInput; // VIN-Foto selbst wird nicht gespeichert
     await addFahrzeug({ vin: finalVin, platz, status, bild });
     await ladeDaten();
     this.reset();
@@ -835,7 +818,7 @@
     fillStellplatzDropdown();
     await ladeDaten();
     setupSortHandlers();
-    await initOCR();
+    setOcrStatus("OCR wird beim ersten Scan geladen…");
   };
 </script>
 
