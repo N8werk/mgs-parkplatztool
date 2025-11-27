@@ -5,148 +5,155 @@
   <title>Parkplatzbelegung Gewog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Tesseract optional weiterhin geladen -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/tesseract.min.js"></script>
-
   <style>
     body { font-family: sans-serif; margin: 0; padding: 0; background: #f7f7f7; }
     .container {
       max-width: 480px; margin: 0 auto; padding: 1em;
       background: #fff; min-height: 100vh;
-      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+      box-sizing: border-box; box-shadow: 0 0 10px rgba(0,0,0,0.05);
+      position: relative;
     }
+
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em; }
+    .header-left { display: flex; align-items: center; }
     .header img { height: 50px; margin-right: 12px; }
-    h2 { margin: 0; }
+    h2 { margin: 0; font-size: 1.4em; }
 
-    label { display: block; margin-top: 1.2em; }
+    label { display: block; margin-top: 1.2em; font-size: 1.1em; }
     input, select, button {
-      width: 100%; padding: 0.7em; margin-top: 0.3em;
-      font-size: 1em; border-radius: 6px; border: 1px solid #ccc;
+      width: 100%; padding: 0.8em; margin-top: 0.4em;
+      font-size: 1.1em; border-radius: 6px;
+      border: 1px solid #ccc; box-sizing: border-box;
     }
+
     button {
-      cursor: pointer; font-weight: bold; background: #1976d2; color: #fff; border: none;
+      background: #1976d2; color: #fff; border: none;
+      font-weight: bold; margin-top: 1.2em;
+      cursor: pointer; transition: background 0.2s;
+    }
+    button:hover { background: #125ea2; }
+
+    .eintragen-btn { background: #3BB54A; }
+    .eintragen-btn:hover { background: #2e8b3b; }
+
+    .button-row {
+      display: flex; flex-wrap: wrap;
+      gap: 0.8em; margin-top: 1.5em;
+    }
+    .button-row button, .button-row input[type="file"] {
+      flex: 1; margin-top: 0;
     }
 
-    #ocrStatus { min-height: 1.7em; font-weight: bold; margin-top: 0.3em; }
+    .table-responsive { overflow-x: auto; margin-top: 1.5em; }
+    table { border-collapse: collapse; width: 100%; min-width: 600px; background: #fff; }
+    th, td { border: 1px solid #ccc; padding: 0.5em; text-align: left; font-size: 0.98em; }
+    th { background: #f0f0f0; }
 
-    .button-row { display: flex; flex-wrap: wrap; gap: 0.5em; margin-top: 1em; }
-    .button-row button { flex: 1; }
+    img.thumb {
+      width: 60px; height: auto; border-radius: 6px;
+      display: block; margin: 0 auto;
+    }
 
-    table { width: 100%; border-collapse: collapse; margin-top: 1em; }
-    th, td { border: 1px solid #ccc; padding: 0.4em; }
-    th { background: #eee; }
+    #ocrStatus { font-weight: bold; min-height: 2em; margin-top: .4em; }
 
-    img.thumb { width: 60px; border-radius: 6px; }
-    .delete-btn { background: #e53935 !important; }
+    /* Responsive */
+    @media (max-width: 600px) {
+      .header img { height: 42px; }
+      table { min-width: 480px; }
+    }
   </style>
 </head>
 
 <body>
-<div class="container">
+  <div class="container">
 
-  <!-- HEADER -->
-  <div class="header">
-    <div style="display:flex;align-items:center;">
-      <img src="https://www.mgs-autozentrum.de/website/themes/mgs-autozentrum.de/img/template_logo.png">
-      <h2>Parkplatzbelegung Gewog</h2>
+    <div class="header">
+      <div class="header-left">
+        <img src="https://www.mgs-autozentrum.de/website/themes/mgs-autozentrum.de/img/template_logo.png">
+        <h2>Parkplatzbelegung Gewog</h2>
+      </div>
     </div>
+
+    <form id="fahrzeugForm" autocomplete="off">
+
+      <label>Fahrgestellnummer (VIN):
+        <input type="text" id="vin" placeholder="VIN manuell eingeben oder Google Lens nutzen">
+        <div id="ocrStatus"></div>
+
+        <button type="button" id="lensScanBtn" style="background:#673ab7;color:white;">
+          VIN mit Google Lens scannen
+        </button>
+
+        <button type="button" id="pasteVinBtn" style="background:#009688;color:white;display:none;">
+          VIN aus Zwischenablage einfügen
+        </button>
+      </label>
+
+      <label>Stellplatz:
+        <select id="stellplatz"></select>
+      </label>
+
+      <label>Status:
+        <select id="status">
+          <option>Werkstatt</option>
+          <option>Bereitstellung Neuwagen</option>
+          <option>Übergabeinspektion</option>
+          <option>Lager</option>
+          <option>Abholung</option>
+          <option>Service</option>
+          <option>Leihwagen</option>
+          <option>Kundenfahrzeug Lager</option>
+        </select>
+      </label>
+
+      <label>Fahrzeugfoto (optional):
+        <input type="file" id="foto" accept="image/*" capture="environment">
+      </label>
+
+      <button type="submit" class="eintragen-btn">Eintragen</button>
+    </form>
+
+
+    <div class="button-row">
+      <button onclick="exportHTML()">Export als HTML</button>
+      <button onclick="exportExcel()">Export als XLSX</button>
+      <button onclick="exportJSON()">Export als JSON</button>
+
+      <button onclick="document.getElementById('jsonImport').click()">JSON importieren</button>
+      <input type="file" id="jsonImport" accept=".json" style="display:none">
+
+      <button onclick="clearAllEntries()" style="background:#e53935;">Alle löschen</button>
+    </div>
+
+    <div class="table-responsive">
+      <table id="datentabelle">
+        <thead>
+          <tr>
+            <th>VIN</th>
+            <th>Stellplatz</th>
+            <th>Status</th>
+            <th>Bild</th>
+            <th>Löschen</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
   </div>
-
-  <!-- FORMULAR -->
-  <form id="fahrzeugForm" autocomplete="off">
-
-    <label>Stellplatz:
-      <select id="stellplatz">
-        <option value="">-- Bitte Stellplatz wählen --</option>
-      </select>
-    </label>
-
-    <label>Fahrgestellnummer (VIN):
-      <input type="text" id="vin" placeholder="VIN manuell oder automatisch" />
-      <div id="ocrStatus"></div>
-    </label>
-
-    <!-- GOOGLE LENS -->
-    <button type="button" id="lensScanBtn" style="background:#673ab7;">
-      VIN mit Google Lens scannen
-    </button>
-
-    <button type="button" id="pasteVinBtn" style="background:#009688; display:none;">
-      VIN aus Zwischenablage einfügen
-    </button>
-
-    <label>VIN-Foto (optional):
-      <input type="file" id="vinFoto" accept="image/*" capture="environment" />
-    </label>
-
-    <label>Fahrzeugfoto:
-      <input type="file" id="foto" accept="image/*" capture="environment" />
-    </label>
-
-    <label>Status:
-      <select id="status">
-        <option>Werkstatt</option>
-        <option>Bereitstellung Neuwagen</option>
-        <option>Übergabeinspektion</option>
-        <option>Lager</option>
-        <option>Abholung</option>
-        <option>Service</option>
-        <option>Leihwagen</option>
-        <option>Kundenfahrzeug Lager</option>
-      </select>
-    </label>
-
-    <button type="submit" class="eintragen-btn" style="background:#3BB54A;margin-top:1em;">
-      Eintragen
-    </button>
-
-  </form>
-
-  <!-- EXPORT / IMPORT -->
-  <div class="button-row">
-    <button onclick="exportHTML()">HTML Export</button>
-    <button onclick="exportExcelWithImages()">XLSX Export</button>
-    <button onclick="exportDBasJSON()">JSON Export</button>
-    <button onclick="document.getElementById('jsonImport').click()">JSON Import</button>
-    <input type="file" id="jsonImport" accept=".json" style="display:none;">
-    <button onclick="clearAllEntries()" class="delete-btn">Alle löschen</button>
-  </div>
-
-  <!-- SUCHFELD -->
-  <input type="text" id="searchInput" placeholder="Suchen..." style="margin-top:1em;">
-
-  <!-- TABELLE -->
-  <table id="datentabelle">
-    <thead>
-      <tr>
-        <th>VIN</th>
-        <th>Stellplatz</th>
-        <th>Status</th>
-        <th>Bild</th>
-        <th>Aktion</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-</div>
-
-<!-- EXPORT LIBS -->
 <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
-
 <script>
-/* ================================================================
-   IndexedDB
-   ================================================================ */
+/* ==========================================================
+   INDEXEDDB – DATENBANK
+   ========================================================== */
 
 let db;
 
 function openDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open("ParkplatzDB", 1);
+    const request = indexedDB.open("ParkplatzDB_Gewog", 1);
 
     request.onupgradeneeded = e => {
       db = e.target.result;
@@ -163,7 +170,8 @@ function openDB() {
 function addFahrzeug(data) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction("fahrzeuge", "readwrite");
-    tx.objectStore("fahrzeuge").add(data);
+    const store = tx.objectStore("fahrzeuge");
+    store.add(data);
     tx.oncomplete = resolve;
     tx.onerror = e => reject(e.target.error);
   });
@@ -172,9 +180,10 @@ function addFahrzeug(data) {
 function getAllFahrzeuge() {
   return new Promise((resolve, reject) => {
     const tx = db.transaction("fahrzeuge", "readonly");
-    const req = tx.objectStore("fahrzeuge").getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = e => reject(e.target.error);
+    const store = tx.objectStore("fahrzeuge");
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = e => reject(e.target.error);
   });
 }
 
@@ -196,9 +205,10 @@ function clearFahrzeuge() {
   });
 }
 
-/* ================================================================
-   Tabelle & UI
-   ================================================================ */
+
+/* ==========================================================
+   TABELLENAUFBAU
+   ========================================================== */
 
 function clearTable() {
   document.querySelector("#datentabelle tbody").innerHTML = "";
@@ -207,253 +217,325 @@ function clearTable() {
 function addRowToTable({ id, vin, platz, status, bild }) {
   const tbody = document.querySelector("#datentabelle tbody");
   const tr = document.createElement("tr");
+
   tr.innerHTML = `
-    <td>${vin || ""}</td>
-    <td>${platz || ""}</td>
-    <td>${status || ""}</td>
+    <td>${vin}</td>
+    <td>${platz}</td>
+    <td>${status}</td>
     <td>${bild ? `<img class="thumb" src="${bild}">` : ""}</td>
-    <td><button class="delete-btn" onclick="deleteSingleEntry(${id})">Löschen</button></td>
+    <td><button onclick="deleteEntry(${id})" style="background:#c62828;color:white;">Löschen</button></td>
   `;
+
   tbody.appendChild(tr);
 }
 
-async function ladeDaten() {
+async function loadTable() {
   clearTable();
   const daten = await getAllFahrzeuge();
   daten.forEach(addRowToTable);
-  filterTable();
 }
 
-async function deleteSingleEntry(id) {
-  if (!confirm("Diesen Eintrag löschen?")) return;
+async function deleteEntry(id) {
+  if (!confirm("Diesen Eintrag wirklich löschen?")) return;
   await deleteFahrzeug(id);
-  await ladeDaten();
+  await loadTable();
 }
-window.deleteSingleEntry = deleteSingleEntry;
 
-async function clearAllEntries() {
-  if (!confirm("Wirklich alle löschen?")) return;
-  await clearFahrzeuge();
-  await ladeDaten();
-}
-window.clearAllEntries = clearAllEntries;
+
+/* ==========================================================
+   STELLPLATZ-DROPDOWN (001–250)
+   ========================================================== */
 
 function fillStellplatzDropdown() {
-  const sel = document.getElementById("stellplatz");
-  sel.innerHTML = '<option value="">-- Bitte Stellplatz wählen --</option>';
+  const sp = document.getElementById("stellplatz");
+  sp.innerHTML = "";
+
+  const first = document.createElement("option");
+  first.value = "";
+  first.textContent = "-- Bitte Stellplatz wählen --";
+  sp.appendChild(first);
+
   for (let i = 1; i <= 250; i++) {
-    const v = i.toString().padStart(3, "0");
+    const txt = i.toString().padStart(3, "0");
     const opt = document.createElement("option");
-    opt.value = v;
-    opt.textContent = v;
-    sel.appendChild(opt);
+    opt.value = txt;
+    opt.textContent = txt;
+    sp.appendChild(opt);
   }
 }
 
-function filterTable() {
-  const q = document.getElementById("searchInput").value.toLowerCase();
-  const rows = document.querySelectorAll("#datentabelle tbody tr");
-  rows.forEach(r => r.style.display = r.innerText.toLowerCase().includes(q) ? "" : "none");
-}
-document.getElementById("searchInput").addEventListener("input", filterTable);
 
-/* ================================================================
-   Bild Base64
-   ================================================================ */
+/* ==========================================================
+   BILD-KONVERTIERUNG (Fotos verkleinern)
+   ========================================================== */
 
-function resizeImageToBase64(file, maxDim = 400, quality = 0.7) {
+function resizeImageToBase64(file, maxDim = 600, quality = 0.75) {
   return new Promise((resolve, reject) => {
-    const img = new Image();
     const reader = new FileReader();
+    const img = new Image();
 
     reader.onload = e => {
       img.onload = () => {
         let w = img.width, h = img.height;
 
-        if (w > maxDim || h > maxDim) {
-          if (w > h) { h *= maxDim / w; w = maxDim; }
-          else { w *= maxDim / h; h = maxDim; }
-        }
+        if (w > h && w > maxDim) { h *= maxDim / w; w = maxDim; }
+        else if (h > w && h > maxDim) { w *= maxDim / h; h = maxDim; }
 
-        const canvas = document.createElement("canvas");
-        canvas.width = w; canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
 
-        resolve(canvas.toDataURL("image/jpeg", quality));
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+
+        resolve(c.toDataURL("image/jpeg", quality));
       };
+
+      img.onerror = reject;
       img.src = e.target.result;
     };
+
+    reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
 
-/* ================================================================
-   Google Lens Integration
-   ================================================================ */
 
-function isAndroid() {
-  return /Android/i.test(navigator.userAgent);
+/* ==========================================================
+   FORMULAR ABSENDEN
+   ========================================================== */
+
+document.getElementById("fahrzeugForm").onsubmit = async function (e) {
+  e.preventDefault();
+
+  const vin = document.getElementById("vin").value.trim();
+  const platz = document.getElementById("stellplatz").value;
+  const status = document.getElementById("status").value;
+
+  if (!vin) { alert("Bitte VIN eingeben."); return; }
+  if (!platz) { alert("Bitte Stellplatz wählen."); return; }
+
+  let bild = "";
+  const foto = document.getElementById("foto");
+
+  if (foto.files.length > 0) {
+    bild = await resizeImageToBase64(foto.files[0]);
+  }
+
+  await addFahrzeug({ vin, platz, status, bild });
+  await loadTable();
+
+  this.reset();
+  document.getElementById("ocrStatus").textContent = "";
+};
+
+
+/* ==========================================================
+   ALLE LÖSCHEN
+   ========================================================== */
+
+async function clearAllEntries() {
+  if (!confirm("Alle Einträge löschen?")) return;
+  await clearFahrzeuge();
+  clearTable();
 }
 
-function launchGoogleLens() {
-  if (!isAndroid()) {
-    alert("Google Lens kann nur unter Android direkt gestartet werden.");
+
+/* ==========================================================
+   EXPORT: JSON
+   ========================================================== */
+
+async function exportJSON() {
+  const daten = await getAllFahrzeuge();
+  const blob = new Blob([JSON.stringify(daten, null, 2)], {
+    type: "application/json"
+  });
+  saveAs(blob, "Parkplatzdaten.json");
+}
+
+document.getElementById("jsonImport").addEventListener("change", async function () {
+  const file = this.files[0];
+  if (!file) return;
+
+  const text = await file.text();
+  let arr;
+
+  try {
+    arr = JSON.parse(text);
+    if (!Array.isArray(arr)) throw "Keine gültige JSON-Liste.";
+  } catch (e) {
+    alert("Fehler beim JSON-Import: " + e);
     return;
   }
 
-  window.location.href =
-    "intent://com.google.ar.lens#Intent;scheme=googleapp;package=com.google.ar.lens;end";
-
-  document.getElementById("pasteVinBtn").style.display = "block";
-}
-
-async function pasteVinFromClipboard() {
-  try {
-    const text = await navigator.clipboard.readText();
-    if (!text) return alert("Zwischenablage ist leer.");
-
-    const vin = extractVin(text);
-    if (vin) {
-      document.getElementById("vin").value = vin;
-      document.getElementById("ocrStatus").textContent =
-        "VIN übernommen: " + vin;
-      document.getElementById("pasteVinBtn").style.display = "none";
-    } else {
-      alert("Kein VIN-ähnlicher Text in der Zwischenablage.");
-    }
-  } catch (e) {
-    alert("Zwischenablage kann nicht gelesen werden: " + e);
+  await clearFahrzeuge();
+  for (const item of arr) {
+    await addFahrzeug(item);
   }
-}
 
-function extractVin(text) {
-  const cleaned = text.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-  const matches = cleaned.match(/[A-HJ-NPR-Z0-9]{17}/);
-  return matches ? matches[0] : null;
-}
-
-document.getElementById("lensScanBtn").addEventListener("click", launchGoogleLens);
-document.getElementById("pasteVinBtn").addEventListener("click", pasteVinFromClipboard);
-
-// Automatische Erkennung, wenn der Benutzer aus Google Lens zurückkommt
-document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState === "visible") {
-    try {
-      const text = await navigator.clipboard.readText();
-      const vin = extractVin(text);
-      if (vin) {
-        document.getElementById("vin").value = vin;
-        document.getElementById("ocrStatus").textContent =
-          "VIN automatisch erkannt: " + vin;
-        document.getElementById("pasteVinBtn").style.display = "none";
-      }
-    } catch { }
-  }
+  await loadTable();
+  alert("Import erfolgreich!");
+  this.value = "";
 });
 
-/* ================================================================
-   Formular-Submit
-   ================================================================ */
 
-document.getElementById("fahrzeugForm").addEventListener("submit", async function(e) {
-  e.preventDefault();
-
-  const platz = document.getElementById("stellplatz").value;
-  const vin = document.getElementById("vin").value.trim();
-  const status = document.getElementById("status").value;
-  const fotoInput = document.getElementById("foto");
-
-  if (!platz) return alert("Bitte Stellplatz auswählen.");
-
-  const alle = await getAllFahrzeuge();
-  if (alle.find(x => x.platz === platz)) return alert("Stellplatz ist belegt.");
-
-  let bild = "";
-  if (fotoInput.files.length) bild = await resizeImageToBase64(fotoInput.files[0]);
-
-  await addFahrzeug({ vin, platz, status, bild });
-  await ladeDaten();
-
-  this.reset();
-});
-
-/* ================================================================
-   Export / Import
-   ================================================================ */
+/* ==========================================================
+   EXPORT: HTML
+   ========================================================== */
 
 async function exportHTML() {
   const daten = await getAllFahrzeuge();
 
-  let html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Fahrzeugdaten</title>";
-  html += "<style>table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:4px;}</style>";
-  html += "</head><body><h2>Fahrzeugdaten</h2><table><tr><th>VIN</th><th>Stellplatz</th><th>Status</th></tr>";
+  let html =
+`<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Parkplatzexport</title>
+<style>
+table{border-collapse:collapse;width:100%;}
+td,th{border:1px solid #999;padding:6px;}
+img{max-width:120px;}
+</style></head><body>
+<h2>Parkplatzbelegung</h2>
+<table><thead>
+<tr><th>VIN</th><th>Stellplatz</th><th>Status</th><th>Bild</th></tr>
+</thead><tbody>`;
 
   daten.forEach(d => {
-    html += `<tr><td>${d.vin}</td><td>${d.platz}</td><td>${d.status}</td></tr>`;
+    html += `
+<tr>
+  <td>${d.vin}</td>
+  <td>${d.platz}</td>
+  <td>${d.status}</td>
+  <td>${d.bild ? `<img src="${d.bild}">` : ""}</td>
+</tr>`;
   });
 
-  html += "</table></body></html>";
-  saveAs(new Blob([html], {type:"text/html"}), "Fahrzeugdaten.html");
+  html += "</tbody></table></body></html>";
+
+  saveAs(new Blob([html], { type: "text/html" }), "Parkplatzdaten.html");
 }
-window.exportHTML = exportHTML;
 
-async function exportDBasJSON() {
+
+/* ==========================================================
+   EXPORT: XLSX
+   ========================================================== */
+
+async function exportExcel() {
   const daten = await getAllFahrzeuge();
-  saveAs(
-    new Blob([JSON.stringify(daten, null, 2)], { type: "application/json" }),
-    "Fahrzeugdaten.json"
-  );
-}
-window.exportDBasJSON = exportDBasJSON;
 
-document.getElementById("jsonImport").addEventListener("change", async function() {
-  const file = this.files[0];
-  if (!file) return;
-
-  try {
-    const arr = JSON.parse(await file.text());
-    await clearFahrzeuge();
-    for (const item of arr) {
-      await addFahrzeug(item);
-    }
-    await ladeDaten();
-    alert("JSON Import erfolgreich.");
-  } catch (e) {
-    alert("Fehler beim Import: " + e);
-  }
-  this.value = "";
-});
-
-async function exportExcelWithImages() {
-  const daten = await getAllFahrzeuge();
   const wb = new ExcelJS.Workbook();
-  const sheet = wb.addWorksheet("Fahrzeuge");
+  const ws = wb.addWorksheet("Parkplätze");
 
-  sheet.columns = [
-    { header: "VIN", key: "vin", width: 20 },
+  ws.columns = [
+    { header: "VIN", key: "vin", width: 25 },
     { header: "Stellplatz", key: "platz", width: 12 },
     { header: "Status", key: "status", width: 25 },
-    { header: "Bild(Base64)", key: "bild", width: 50 }
+    { header: "Bild (Base64)", key: "bild", width: 60 }
   ];
 
-  daten.forEach(d => sheet.addRow(d));
+  daten.forEach(d => ws.addRow(d));
 
   const buf = await wb.xlsx.writeBuffer();
-  saveAs(new Blob([buf]), "Fahrzeugdaten.xlsx");
+  saveAs(new Blob([buf]), "Parkplatzdaten.xlsx");
 }
-window.exportExcelWithImages = exportExcelWithImages;
+</script>
+<script>
+/* ==========================================================
+   GOOGLE LENS – LÖSUNG B+ (AUTO-FILL)
+   ========================================================== */
 
-/* ================================================================
-   INIT
-   ================================================================ */
+/* Prüft ob Android-Gerät */
+function isAndroid() {
+  return /Android/i.test(navigator.userAgent);
+}
+
+/* Google Lens starten */
+function launchGoogleLens() {
+  if (!isAndroid()) {
+    alert("Google Lens kann nur auf Android automatisch geöffnet werden.");
+    return;
+  }
+
+  // Google Lens Intent öffnen
+  window.location.href =
+    "intent://com.google.ar.lens#Intent;scheme=googleapp;package=com.google.ar.lens;end";
+
+  // Button einblenden, falls Nutzer manuell einfügen möchte
+  document.getElementById("pasteVinBtn").style.display = "block";
+}
+
+/* VIN aus Text extrahieren */
+function extractVinFromText(text) {
+  if (!text) return null;
+  const cleaned = text.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  const match = cleaned.match(/[A-HJ-NPR-Z0-9]{17}/);
+  return match ? match[0] : null;
+}
+
+/* VIN automatisches Auslesen */
+async function tryClipboardVinUpdate(auto = false) {
+  try {
+    const text = await navigator.clipboard.readText();
+    const vin = extractVinFromText(text);
+
+    if (vin) {
+      document.getElementById("vin").value = vin;
+
+      document.getElementById("ocrStatus").textContent =
+        (auto ? "VIN automatisch übernommen: " : "VIN eingefügt: ") + vin;
+      document.getElementById("ocrStatus").style.color = "green";
+
+      // Einfüge-Button verbergen
+      document.getElementById("pasteVinBtn").style.display = "none";
+
+      return true;
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+/* Manueller Button */
+document.getElementById("pasteVinBtn").addEventListener("click", async () => {
+  const ok = await tryClipboardVinUpdate(false);
+  if (!ok) alert("Keine VIN in der Zwischenablage gefunden.");
+});
+
+/* Automatische Erkennung beim Zurückkehren */
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible") {
+
+    // Polling: 300 ms * 10 Versuche (3 Sekunden)
+    let tries = 0;
+    const interval = setInterval(async () => {
+      tries++;
+
+      const success = await tryClipboardVinUpdate(true);
+      if (success || tries > 10) {
+        clearInterval(interval);
+      }
+
+    }, 300);
+  }
+});
+
+/* Button zu Google Lens verbinden */
+document.getElementById("lensScanBtn").addEventListener("click", () => {
+  document.getElementById("ocrStatus").textContent = "";
+  launchGoogleLens();
+});
+
+
+/* ==========================================================
+   INITIALISIERUNG
+   ========================================================== */
 
 window.onload = async () => {
   await openDB();
   fillStellplatzDropdown();
-  await ladeDaten();
-  document.getElementById("ocrStatus").textContent = "Bereit.";
+  loadTable();
 };
 
 </script>
+
 </body>
 </html>
