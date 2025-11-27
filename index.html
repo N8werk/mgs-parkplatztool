@@ -454,6 +454,22 @@
 
     const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
+// --- Deskew (automatische Ausrichtung) ---
+function deskewCanvas(canvas) {
+  // Tesseract kann selbst deskew anwenden:
+  return Tesseract.recognize(canvas, "eng", {
+    tessedit_char_whitelist: "ABCDEFGHJKLMNPRSTUVWXYZ0123456789",
+    textord_straighten_enable: "1"
+  });
+}
+// --- Deskew (automatische Ausrichtung) ---
+function deskewCanvas(canvas) {
+  // Tesseract kann selbst deskew anwenden:
+  return Tesseract.recognize(canvas, "eng", {
+    tessedit_char_whitelist: "ABCDEFGHJKLMNPRSTUVWXYZ0123456789",
+    textord_straighten_enable: "1"
+  });
+}
 
     // 1. Graustufen
     for (let i = 0; i < data.length; i += 4) {
@@ -510,9 +526,12 @@ const cropW = vw * 0.76;     // verhindert Reflexionsränder
 const cropY = vh * 0.42;     // leicht unter Mitte
 const cropH = vh * 0.10;     // dünner Streifen, exakt wie dein VIN-Foto
 
+// Vorverarbeitung
+preprocessCanvasImage(cropCanvas);
 
-    // Vorverarbeitung
-    preprocessCanvasImage(cropCanvas);
+// zusätzliche Filter
+applyThreshold(cropCanvas);
+
 
     setOcrStatus("Standbild wird analysiert …");
 
@@ -712,5 +731,6 @@ const cropH = vh * 0.10;     // dünner Streifen, exakt wie dein VIN-Foto
 </script>
 </body>
 </html>
+
 
 
